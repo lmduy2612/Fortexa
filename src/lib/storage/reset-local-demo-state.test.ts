@@ -213,4 +213,23 @@ describe("runReset script logic", () => {
     expect(redisKeysMock).toHaveBeenCalledWith("fortexa:*");
     expect(redisDelMock).toHaveBeenCalledWith("fortexa:rate-limit:test");
   });
+
+  it("refuses to execute when network is production", async () => {
+    const result = await runReset({
+      allowLocalReset: true,
+      yesFlag: true,
+      networkPassphrase: "Public Global Stellar Network ; July 2015",
+      databaseUrl: "postgres://localhost:5432/fortexa",
+      log: mockLog,
+      errorLog: mockError,
+      storeDir: "/mock/store",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.refusalReason).toContain("production network detected");
+    expect(fs.unlink).not.toHaveBeenCalled();
+    expect(queryMock).not.toHaveBeenCalled();
+    // Verify no credentials leaked
+    expect(errorOutput.join("\n")).not.toContain("password");
+  });
 });
