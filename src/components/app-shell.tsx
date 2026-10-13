@@ -1,8 +1,4 @@
-import { type ReactNode } from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { getSessionRole } from '@/lib/auth/wallet-role';
-import { getSession } from '@/lib/auth/session';
+"use client";
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
@@ -12,6 +8,8 @@ import {
   LayoutDashboard,
   Terminal,
   Settings,
+  CreditCard,
+  Shield,
   LogOut,
   Radio,
   Loader2,
@@ -20,23 +18,22 @@ import {
 import { AppWorkspaceBackground } from "@/components/app-workspace-background";
 import { Button } from "@/components/ui/button";
 import { useAuthSession } from "@/lib/auth/use-auth-session";
+import { resolveRolesByWallet } from "@/lib/auth/wallet-role";
+import type { AuthRole } from "@/lib/auth/session";
 import { cn } from "@/lib/utils/cn";
 import { truncateMiddle } from "@/lib/utils/format";
-
-const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/console", label: "Console", icon: Terminal },
-  { href: "/settings", label: "Settings", icon: Settings },
-];
 
 const pageTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/console": "Console",
+  "/pay": "Pay",
+  "/policies": "Policy",
   "/settings": "Settings",
 };
 
 function getPageTitle(pathname: string) {
   if (pathname.startsWith("/settings")) return "Settings";
+  if (pathname.startsWith("/policies")) return "Policy";
   return pageTitles[pathname] ?? "Fortexa";
 }
 
@@ -47,7 +44,7 @@ function SessionChip({
 }: {
   loading: boolean;
   wallet: string | null;
-  role: "operator" | "viewer" | null;
+  role: AuthRole | null;
 }) {
   if (loading) {
     return (
@@ -108,6 +105,40 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
+  const hasConfiguredWalletLists =
+    Boolean(process.env.FORTEXA_OPERATOR_WALLETS?.trim()) ||
+    Boolean(process.env.FORTEXA_SIGNER_WALLETS?.trim()) ||
+    Boolean(process.env.FORTEXA_VIEWER_WALLETS?.trim());
+
+  const roles: AuthRole[] = [];
+  if (role) {
+    roles.push(role);
+  }
+  if (wallet && hasConfiguredWalletLists) {
+    for (const r of resolveRolesByWallet(wallet)) {
+      if (!roles.includes(r)) {
+        roles.push(r);
+      }
+    }
+  } else if (!role && wallet) {
+    roles.push(...resolveRolesByWallet(wallet));
+  }
+
+  const isSigner = roles.includes("signer");
+  const isOperator = roles.includes("operator");
+
+  const navItems = [
+    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/console", label: "Console", icon: Terminal },
+    ...(isSigner
+      ? [{ href: "/pay", label: "Pay", icon: CreditCard, prefetch: false }]
+      : []),
+    ...(isOperator
+      ? [{ href: "/policies", label: "Policy", icon: Shield, prefetch: false }]
+      : []),
+    { href: "/settings", label: "Settings", icon: Settings },
+  ];
+
   const pageTitle = getPageTitle(pathname);
 
   return (
@@ -130,13 +161,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {navItems.map((item) => {
             const active =
               pathname === item.href ||
-              (item.href === "/settings" && pathname.startsWith("/settings"));
+              (item.href === "/settings" && pathname.startsWith("/settings")) ||
+              (item.href === "/policies" && pathname.startsWith("/policies"));
             const Icon = item.icon;
 
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={item.prefetch ?? undefined}
                 className={cn(
                   "relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
                   active
@@ -201,13 +234,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {navItems.map((item) => {
             const active =
               pathname === item.href ||
-              (item.href === "/settings" && pathname.startsWith("/settings"));
+              (item.href === "/settings" && pathname.startsWith("/settings")) ||
+              (item.href === "/policies" && pathname.startsWith("/policies"));
             const Icon = item.icon;
 
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={item.prefetch ?? undefined}
                 className={cn(
                   "flex flex-1 flex-col items-center gap-1 rounded-xl py-2 text-[10px] font-medium transition",
                   active ? "text-[hsl(var(--accent))]" : "text-[hsl(var(--muted-foreground))]"
